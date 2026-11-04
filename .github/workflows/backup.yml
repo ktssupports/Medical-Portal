@@ -1,0 +1,31 @@
+name: Encrypted database backup
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 2 * * *'
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      PGDATABASE: ${{ secrets.BACKUP_DATABASE_URL }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check backup configuration
+        run: test -n "$PGDATABASE" && test -n "$BACKUP_ENCRYPTION_KEY"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install cryptography==46.0.3
+      - name: Export and encrypt
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -e PGDATABASE postgres:17 pg_dump --format=custom --schema=medicore --no-owner --no-acl | python deploy/backup.py medical-portal.dump.enc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-database-backup
+          path: medical-portal.dump.enc
+          retention-days: 7

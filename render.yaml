@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: medicore-portal
+    runtime: python
+    plan: free
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py && gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 60 --access-logfile /dev/null
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: medical-reports
+      - key: INITIAL_ADMIN_ID
+        value: ADM-101
+      - key: INITIAL_ADMIN_NAME
+        value: Portal Administrator
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false

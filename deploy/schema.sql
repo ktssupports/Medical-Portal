@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS organizations(id TEXT PRIMARY KEY,name TEXT NOT NULL,type TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,name TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('doctor','patient','laboratory','admin')),password TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','approved','suspended')),org_id TEXT NOT NULL REFERENCES organizations(id));
+CREATE TABLE IF NOT EXISTS patients(id TEXT PRIMARY KEY,name TEXT NOT NULL,age INTEGER NOT NULL,gender TEXT NOT NULL,phone TEXT NOT NULL,org_id TEXT NOT NULL REFERENCES organizations(id),created DOUBLE PRECISION NOT NULL);
+CREATE TABLE IF NOT EXISTS access(patient_id TEXT NOT NULL REFERENCES patients(id),doctor_id TEXT NOT NULL REFERENCES users(id),granted INTEGER NOT NULL CHECK(granted IN (0,1)),PRIMARY KEY(patient_id,doctor_id));
+CREATE TABLE IF NOT EXISTS readings(id TEXT PRIMARY KEY,patient_id TEXT NOT NULL REFERENCES patients(id),systolic INTEGER NOT NULL,diastolic INTEGER NOT NULL,sugar INTEGER NOT NULL,created DOUBLE PRECISION NOT NULL,doctor_id TEXT NOT NULL REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY,patient_id TEXT NOT NULL REFERENCES patients(id),doctor_id TEXT NOT NULL REFERENCES users(id),lab_id TEXT NOT NULL REFERENCES users(id),test TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','processing','completed')),created DOUBLE PRECISION NOT NULL);
+CREATE TABLE IF NOT EXISTS reports(id TEXT PRIMARY KEY,patient_id TEXT NOT NULL REFERENCES patients(id),lab_id TEXT NOT NULL REFERENCES users(id),name TEXT NOT NULL,created DOUBLE PRECISION NOT NULL,order_id TEXT NOT NULL UNIQUE REFERENCES orders(id));
+CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),expires DOUBLE PRECISION NOT NULL);
+CREATE TABLE IF NOT EXISTS login_attempts(id TEXT PRIMARY KEY,account TEXT NOT NULL,created DOUBLE PRECISION NOT NULL);
+CREATE TABLE IF NOT EXISTS audit(id TEXT PRIMARY KEY,actor TEXT NOT NULL,action TEXT NOT NULL,target TEXT NOT NULL,created DOUBLE PRECISION NOT NULL);
+CREATE INDEX IF NOT EXISTS readings_patient ON readings(patient_id,created);
+CREATE INDEX IF NOT EXISTS orders_lab ON orders(lab_id);
+CREATE INDEX IF NOT EXISTS attempts_account ON login_attempts(account,created);
