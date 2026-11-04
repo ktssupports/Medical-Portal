@@ -9,8 +9,14 @@ ROOT = Path(__file__).parent
 DEMO = os.getenv('DEMO_MODE') == '1'
 DATABASE = os.getenv('DATABASE_URL')
 secret = os.getenv('SECRET_KEY')
-if not DEMO and (not secret or len(secret) < 32 or not DATABASE):
-    raise RuntimeError('Production requires DATABASE_URL and a random SECRET_KEY of at least 32 characters.')
+if not DEMO:
+    invalid_settings = []
+    if not DATABASE or not DATABASE.strip():
+        invalid_settings.append('DATABASE_URL (missing)')
+    if not secret or len(secret) < 32:
+        invalid_settings.append('SECRET_KEY (requires at least 32 characters)')
+    if invalid_settings:
+        raise RuntimeError('Configure these Render Environment settings: ' + ', '.join(invalid_settings))
 app = Flask(__name__)
 app.config.update(SECRET_KEY=secret or secrets.token_hex(32), MAX_CONTENT_LENGTH=6*1024*1024,
     SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Strict', SESSION_COOKIE_SECURE=not DEMO,
