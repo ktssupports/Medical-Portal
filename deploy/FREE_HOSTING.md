@@ -64,3 +64,9 @@ Test login, sample readings, permissions and report metadata after restore. Conf
 - Permission errors after hardening: use the Supabase database owner connection as described, or provision a dedicated server role with access/BYPASSRLS; do not expose the schema to browser roles.
 - Upload fails: verify private bucket name and service-role JWT. The API deliberately returns a generic storage error instead of logging credentials/provider responses.
 - Empty deployment: the repository alone does not create provider accounts or secrets. A live URL exists only after Render completes deployment.
+
+## Reset an existing administrator password
+
+If `ADM-101` is approved but rejects the password, add `RESET_ADMIN_PASSWORD` in the Render service's Environment settings with a new unique password of at least 12 characters. Save and deploy the latest `main` commit. The initializer resets only the approved administrator named by `INITIAL_ADMIN_ID` (default `ADM-101`), revokes its old sessions, clears its login attempt limit, and records an audit event. No password is printed. Repeated starts with the same value do not reset it again or revoke fresh sessions.
+
+Sign in with the new password, then **remove `RESET_ADMIN_PASSWORD`** and save/deploy. The password remains saved as a salted hash in PostgreSQL. Changing `INITIAL_ADMIN_PASSWORD` alone only affects first-account creation and does not reset an existing account.

@@ -91,6 +91,18 @@ class PortalTests(unittest.TestCase):
             self.assertEqual(args,('GET','https://test.supabase.co/storage/v1/object/medical-reports/abc'))
             self.assertEqual(kwargs['headers']['Authorization'],'Bearer server-secret')
             self.assertFalse(kwargs['allow_redirects'])
+    def test_admin_password_reset(self):
+        from manage import initialize
+        with patch.dict(os.environ, {'INITIAL_ADMIN_ID':'ADM-101','RESET_ADMIN_PASSWORD':'NewPrivatePassword123!'}):
+            initialize()
+            self.assertEqual(self.admin.get('/').status_code,302)
+            c=app.test_client()
+            self.assertEqual(self.post(c,'/login',{'id':'ADM-101','password':'DemoPass123!'}).status_code,401)
+            self.assertEqual(self.post(c,'/login',{'id':'ADM-101','password':'NewPrivatePassword123!'}).status_code,302)
+            initialize()
+            self.assertEqual(c.get('/').status_code,200)
+            with app.app_context():
+                self.assertEqual(q("SELECT COUNT(*) AS n FROM audit WHERE action='admin_password_reset'",one=True)['n'],1)
     def test_login_rate_limit(self):
         c=app.test_client()
         for _ in range(10):self.assertEqual(self.post(c,'/login',{'id':'UNKNOWN','password':'bad'}).status_code,401)
