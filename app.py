@@ -1,6 +1,7 @@
 """MediCore: four-role portal for Render + Supabase free-tier deployment."""
 import os, time, secrets, hashlib, sqlite3, functools, io, re
-from datetime import date as calendar_date
+from datetime import date as calendar_date, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import requests
 from flask import Flask, request, session, g, redirect, url_for, render_template, flash, abort, send_file, jsonify
@@ -110,6 +111,10 @@ def context():
 @app.template_filter('date')
 def date(value): return time.strftime('%d %b %Y',time.localtime(value))
 
+@app.template_filter('reading_date')
+def reading_date(value):
+    return datetime.fromtimestamp(value,ZoneInfo('Asia/Kolkata')).strftime('%d/%m/%Y')
+
 @app.get('/health')
 def health():
     try:
@@ -207,7 +212,7 @@ def patient_detail(pid):
     reports=q('SELECT * FROM reports WHERE patient_id=? ORDER BY created DESC',(pid,))
     notes=q('SELECT n.*,u.name AS doctor_name FROM clinical_notes n JOIN users u ON u.id=n.doctor_id WHERE n.patient_id=? ORDER BY n.created DESC,n.id DESC',(pid,))
     audit('view_patient',pid);db().commit()
-    return render_template('patient.html',active='history' if g.user['role']=='patient' else 'patients',patient=p,readings=readings,reports=reports,notes=notes)
+    return render_template('patient.html',active='history' if g.user['role']=='patient' else 'patients',patient=p,readings=readings,reports=reports,notes=notes,reading_today=datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%d/%m/%Y'))
 
 @app.post('/patients/<pid>/notes')
 @roles('doctor')
