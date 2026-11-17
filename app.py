@@ -1,5 +1,6 @@
 """MediCore: four-role portal for Render + Supabase free-tier deployment."""
-import os, time, secrets, hashlib, sqlite3, functools, io
+import os, time, secrets, hashlib, sqlite3, functools, io, re
+from datetime import date as calendar_date
 from pathlib import Path
 import requests
 from flask import Flask, request, session, g, redirect, url_for, render_template, flash, abort, send_file, jsonify
@@ -58,6 +59,11 @@ def init_db():
     if DATABASE: db().execute('CREATE SCHEMA IF NOT EXISTS medicore')
     for stmt in (ROOT/'deploy/schema.sql').read_text().split(';'):
         if stmt.strip(): execute(stmt)
+    # Upgrade existing patient tables without replacing their records.
+    columns = {r['column_name'] for r in q("SELECT column_name FROM information_schema.columns WHERE table_schema='medicore' AND table_name='patients'")} if DATABASE else {r['name'] for r in q('PRAGMA table_info(patients)')}
+    for column, kind in [('email', 'TEXT'), ('dob', 'DATE')]:
+        if column not in columns:
+            execute(f'ALTER TABLE patients ADD COLUMN {column} {kind}')
     db().commit()
 
 def can_read(pid):
@@ -168,14 +174,25 @@ def patients():
 @roles('doctor','admin')
 def register_patient():
     if request.method=='POST':
-        name=request.form.get('name','').strip();age=request.form.get('age','');phone=request.form.get('phone','').strip();gender=request.form.get('gender','')
-        if not age.isdigit() or not 0<int(age)<130 or not name or len(name)>150 or not phone or gender not in ('Female','Male','Other','Prefer not to say'): abort(400,'Check the patient details.')
+        name=request.form.get('name','').strip();phone=request.form.get('phone','').strip();gender=request.form.get('gender','')
+        email=request.form.get('email','').strip()
+        try:
+            born=calendar_date.fromisoformat(request.form.get('dob',''))
+        except ValueError:
+            abort(400,'Enter a valid date of birth.')
+        today=calendar_date.today()
+        age=today.year-born.year-((today.month,today.day)<(born.month,born.day))
+        if born>today or not 0<=age<130:
+            abort(400,'Date of birth must be today or earlier and within 130 years.')
+        if email and (len(email)>254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+",email)):
+            abort(400,'Enter a valid email address or leave it blank.')
+        if not name or len(name)>150 or not phone or gender not in ('Female','Male','Other','Prefer not to say'): abort(400,'Check the patient details.')
         pid='PAT-'+secrets.token_hex(4).upper()
-        execute('INSERT INTO patients VALUES(?,?,?,?,?,?,?)',(pid,name,int(age),gender,phone,g.user['org_id'],time.time()))
+        execute('INSERT INTO patients (id,name,age,gender,phone,org_id,created,email,dob) VALUES(?,?,?,?,?,?,?,?,?)',(pid,name,age,gender,phone,g.user['org_id'],time.time(),email or None,born.isoformat()))
         if g.user['role']=='doctor': execute('INSERT INTO access VALUES(?,?,?)',(pid,g.user['id'],1))
         audit('register_patient',pid);db().commit();flash('Patient registered. Unique ID: '+pid)
         return redirect(url_for('patient_detail',pid=pid))
-    return render_template('register.html',active='register')
+    return render_template('register.html',active='register',today=calendar_date.today().isoformat())
 
 @app.get('/patients/<pid>')
 @roles('doctor','admin','patient')
@@ -325,7 +342,7 @@ def seed_demo():
     for uid,name,role in [('DOC-101','Dr. Sarah Mitchell','doctor'),('PAT-4921','Olivia Rhye','patient'),('LAB-101','Clarity Diagnostics','laboratory'),('ADM-101','Alex Morgan','admin')]:
         execute('INSERT INTO users VALUES(?,?,?,?,?,?)',(uid,name,role,generate_password_hash('DemoPass123!'),'approved','ORG-101'))
     for pid,name,age,gender,phone in [('PAT-4921','Olivia Rhye',32,'Female','+1 415 555 0124'),('PAT-4922','Phoenix Baker',45,'Male','+1 415 555 0198'),('PAT-4923','Lana Steiner',28,'Female','+1 415 555 0162')]:
-        execute('INSERT INTO patients VALUES(?,?,?,?,?,?,?)',(pid,name,age,gender,phone,'ORG-101',time.time()));execute('INSERT INTO access VALUES(?,?,?)',(pid,'DOC-101',1))
+        execute('INSERT INTO patients (id,name,age,gender,phone,org_id,created) VALUES(?,?,?,?,?,?,?)',(pid,name,age,gender,phone,'ORG-101',time.time()));execute('INSERT INTO access VALUES(?,?,?)',(pid,'DOC-101',1))
     for i,(sys,dia,sugar) in enumerate([(124,82,108),(122,80,104),(128,84,112),(120,78,98),(118,78,102),(122,80,106)]):
         execute('INSERT INTO readings VALUES(?,?,?,?,?,?,?)',(secrets.token_hex(8),'PAT-4921',sys,dia,sugar,time.time()-(5-i)*86400,'DOC-101'))
     execute('INSERT INTO orders VALUES(?,?,?,?,?,?,?)',('ORD-2041','PAT-4921','DOC-101','LAB-101','Complete blood count','pending',time.time()));db().commit()
