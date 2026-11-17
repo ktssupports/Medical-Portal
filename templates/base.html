@@ -1,7 +1,8 @@
 {% from 'components.html' import icon,token with context %}
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block title %}MediCore · Medical Portal{% endblock %}</title><meta name="description" content="Connected care for doctors, patients, laboratories and administrators."><link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}"><script defer src="{{ url_for('static',filename='app.js') }}"></script></head><body>{% if user %}<aside class="sidebar" id="sidebar"><a href="/" class="brand"><span class="brand-mark">✚</span>MediCore</a><div class="workspace-label">{{ user.role|upper }} WORKSPACE</div><nav aria-label="Portal navigation">
 {% set menu=[('dashboard','Overview','grid','/')] %}
-{% if user.role in ['doctor','admin'] %}{% set menu=menu+[('patients','Lookup patient','search','/patients'),('register','Register patient','users','/patients/register')] %}{% endif %}
+{% if user.role=='admin' %}{% set menu=menu+[('patients','Lookup patient','search','/patients')] %}{% endif %}
+{% if user.role in ['doctor','admin'] %}{% set menu=menu+[('register','Register patient','users','/patients/register')] %}{% endif %}
 {% if user.role=='patient' %}{% set menu=menu+[('history','My health history','heart','/patients/'+user.id)] %}{% endif %}
 {% if user.role in ['doctor','laboratory','admin'] %}{% set menu=menu+[('orders','Test orders','lab','/orders')] %}{% endif %}
 {% set menu=menu+[('reports','Medical reports','report','/reports')] %}
