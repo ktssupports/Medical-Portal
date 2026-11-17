@@ -1,1 +1,70 @@
-{% extends 'base.html' %}{% from 'components.html' import heading,chart,report_table,token,icon with context %}{% block content %}{{ heading('Your health history' if user.role=='patient' else 'Patient dashboard','A connected view of medical records, readings and reports.') }}<section class="card"><div class="card-body patient-banner"><div class="avatar">{{ patient.name[:1] }}{{ patient.name.split(' ')[-1][:1] }}</div><div><h2>{{ patient.name }}</h2><p>{{ patient.id }} &nbsp;·&nbsp; {{ patient.age }} years &nbsp;·&nbsp; {{ patient.gender }} &nbsp;·&nbsp; {{ patient.phone }}</p>{% if patient.dob %}<p>Date of birth: {{ patient.dob }}</p>{% endif %}{% if patient.email %}<p>Email: {{ patient.email }}</p>{% endif %}</div></div></section><div class="history-grid">{{ chart(readings,'systolic','Blood pressure','mmHg') }}{{ chart(readings,'sugar','Blood sugar','mg/dL') }}</div>{% if user.role=='doctor' %}<section class="card"><div class="card-head"><div><h2>Add health readings</h2><p>Record measurements taken during this visit.</p></div></div><form class="card-body" action="/readings" method="post">{{ token() }}<input type="hidden" name="patient_id" value="{{ patient.id }}"><div class="form-grid three"><label>Systolic (mmHg)<input type="number" name="systolic" required min="50" max="300" placeholder="120"></label><label>Diastolic (mmHg)<input type="number" name="diastolic" required min="30" max="200" placeholder="80"></label><label>Blood sugar (mg/dL)<input type="number" name="sugar" required min="20" max="700" placeholder="100"></label></div><div class="form-actions"><button class="btn">{{ icon('plus') }}Save readings</button></div></form></section>{% endif %}<section class="card"><div class="card-head"><h2>Reading history</h2></div><div class="table-scroll"><table><thead><tr><th>Recorded</th><th>Blood pressure</th><th>Blood sugar</th><th>Doctor</th></tr></thead><tbody>{% for r in readings %}<tr><td>{{ r.created|date }}</td><td>{{ r.systolic }}/{{ r.diastolic }} mmHg</td><td>{{ r.sugar }} mg/dL</td><td>{{ r.doctor_id }}</td></tr>{% else %}<tr><td colspan="4" class="empty">No readings recorded yet.</td></tr>{% endfor %}</tbody></table></div></section><section class="card"><div class="card-head"><h2>Medical reports</h2></div>{{ report_table(reports) }}</section>{% endblock %}
+{% extends 'base.html' %}
+{% from 'components.html' import heading,chart,report_table,token,icon with context %}
+{% block content %}
+{{ heading('Your patient record' if user.role=='patient' else 'Patient consultation','Clinical notes, health readings and history in one place.') }}
+<section class="card">
+  <div class="card-body patient-banner">
+    <div class="avatar">{{ patient.name[:1] }}{{ patient.name.split(' ')[-1][:1] }}</div>
+    <div>
+      <h2>{{ patient.name }}</h2>
+      <p>{{ patient.id }} &nbsp;·&nbsp; {{ patient.age }} years &nbsp;·&nbsp; {{ patient.gender }} &nbsp;·&nbsp; {{ patient.phone }}</p>
+      {% if patient.dob %}<p>Date of birth: {{ patient.dob }}</p>{% endif %}
+      {% if patient.email %}<p>Email: {{ patient.email }}</p>{% endif %}
+    </div>
+  </div>
+</section>
+<div class="consultation-layout">
+  <div class="consultation-main">
+    {% if user.role=='doctor' %}
+    <section class="card notes-editor">
+      <div class="card-head"><div><h2>Clinical notes</h2><p>Write your consultation notes. Saved notes are visible to this patient.</p></div>{{ icon('report') }}</div>
+      <form class="card-body" method="post" action="{{ url_for('add_clinical_note',pid=patient.id) }}">
+        {{ token() }}
+        <label class="sr-only" for="clinical-note">New clinical note</label>
+        <textarea id="clinical-note" name="body" required maxlength="20000" placeholder="Start writing your consultation notes here…" aria-describedby="note-sharing"></textarea>
+        <div class="notes-actions"><p id="note-sharing">{{ icon('shield') }}Shared with the patient after saving.</p><button class="btn" type="submit">{{ icon('plus') }}Save note</button></div>
+      </form>
+    </section>
+    {% endif %}
+    <section class="card saved-notes">
+      <div class="card-head"><div><h2>{{ 'Your clinical notes' if user.role=='patient' else 'Saved clinical notes' }}</h2><p>Consultation notes from the authorized care team</p></div><span class="pill">{{ notes|length }} notes</span></div>
+      {% for note in notes %}
+      <article class="clinical-note">
+        <div class="note-meta"><strong>{{ note.doctor_name }}</strong><time>{{ note.created|date }}</time></div>
+        <p class="note-content">{{ note.body }}</p>
+      </article>
+      {% else %}<div class="empty">No clinical notes yet. Notes saved by your doctor will appear here.</div>{% endfor %}
+    </section>
+    <section class="card"><div class="card-head"><h2>Medical reports</h2></div>{{ report_table(reports) }}</section>
+  </div>
+  <aside class="consultation-sidebar" aria-label="Patient history and health readings">
+    <section class="card">
+      <div class="card-head"><div><h2>Patient history</h2><p>Previous consultations</p></div>{{ icon('clock') }}</div>
+      <div class="card-body history-timeline">
+        {% for note in notes %}
+        <details class="history-entry"><summary><span>{{ note.created|date }}</span><strong>{{ note.doctor_name }}</strong></summary><p class="note-content">{{ note.body }}</p></details>
+        {% else %}<p class="sidebar-empty">No consultation history yet.</p>{% endfor %}
+      </div>
+    </section>
+    {{ chart(readings,'systolic','Blood pressure','mmHg') }}
+    {{ chart(readings,'sugar','Blood sugar','mg/dL') }}
+    {% if user.role=='doctor' %}
+    <section class="card"><div class="card-head"><div><h2>Add BP / sugar readings</h2><p>Record measurements for this visit.</p></div></div>
+      <form class="card-body" action="/readings" method="post">{{ token() }}<input type="hidden" name="patient_id" value="{{ patient.id }}">
+        <div class="readings-form">
+          <label>Systolic (mmHg)<input type="number" name="systolic" required min="50" max="300" placeholder="120"></label>
+          <label>Diastolic (mmHg)<input type="number" name="diastolic" required min="30" max="200" placeholder="80"></label>
+          <label>Blood sugar (mg/dL)<input type="number" name="sugar" required min="20" max="700" placeholder="100"></label>
+        </div><div class="form-actions"><button class="btn" type="submit">Save readings</button></div>
+      </form>
+    </section>
+    {% endif %}
+    <section class="card"><div class="card-head"><h2>Reading history</h2></div>
+      <div class="table-scroll"><table><thead><tr><th>Date</th><th>BP</th><th>Sugar</th></tr></thead><tbody>
+        {% for r in readings %}<tr><td>{{ r.created|date }}</td><td>{{ r.systolic }}/{{ r.diastolic }}<small class="sub">mmHg</small></td><td>{{ r.sugar }}<small class="sub">mg/dL</small></td></tr>
+        {% else %}<tr><td colspan="3" class="empty">No readings recorded yet.</td></tr>{% endfor %}
+      </tbody></table></div>
+    </section>
+  </aside>
+</div>
+{% endblock %}

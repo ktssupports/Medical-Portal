@@ -11,3 +11,5 @@ CREATE TABLE IF NOT EXISTS audit(id TEXT PRIMARY KEY,actor TEXT NOT NULL,action 
 CREATE INDEX IF NOT EXISTS readings_patient ON readings(patient_id,created);
 CREATE INDEX IF NOT EXISTS orders_lab ON orders(lab_id);
 CREATE INDEX IF NOT EXISTS attempts_account ON login_attempts(account,created);
+CREATE TABLE IF NOT EXISTS clinical_notes(id TEXT PRIMARY KEY,patient_id TEXT NOT NULL REFERENCES patients(id),doctor_id TEXT NOT NULL REFERENCES users(id),body TEXT NOT NULL,created DOUBLE PRECISION NOT NULL);
+CREATE INDEX IF NOT EXISTS clinical_notes_patient ON clinical_notes(patient_id,created);
