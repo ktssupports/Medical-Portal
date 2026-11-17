@@ -48,7 +48,7 @@ class PortalTests(unittest.TestCase):
         self.post(self.patient,'/permissions',{'doctor_id':'DOC-101','granted':'1'})
         self.assertEqual(self.doctor.get('/patients/PAT-4921').status_code,200)
     def test_registration_orders_reports(self):
-        r=self.post(self.doctor,'/patients/register',{'name':'Test Patient','age':'42','gender':'Female','phone':'555-0100'})
+        r=self.post(self.doctor,'/patients/register',{'name':'Test Patient','dob':'1984-06-15','gender':'Female','phone':'555-0100'})
         self.assertEqual(r.status_code,302);pid=r.location.rsplit('/',1)[-1]
         self.assertEqual(self.post(self.doctor,'/orders',{'patient_id':pid,'lab_id':'LAB-101','test':'CBC'}).status_code,302)
         with app.app_context():oid=q('SELECT id FROM orders WHERE patient_id=?',(pid,),one=True)['id']
@@ -91,6 +91,34 @@ class PortalTests(unittest.TestCase):
             self.assertEqual(args,('GET','https://test.supabase.co/storage/v1/object/medical-reports/abc'))
             self.assertEqual(kwargs['headers']['Authorization'],'Bearer server-secret')
             self.assertFalse(kwargs['allow_redirects'])
+    def test_patient_registration_email_and_dob(self):
+        details={'name':'DOB Patient','dob':'2000-06-15','gender':'Female','phone':'555-0100','email':'patient@example.com'}
+        response=self.post(self.doctor,'/patients/register',details)
+        self.assertEqual(response.status_code,302)
+        pid=response.location.rsplit('/',1)[-1]
+        with app.app_context():
+            patient=q('SELECT email,dob,age FROM patients WHERE id=?',(pid,),one=True)
+            self.assertEqual(patient['email'],'patient@example.com')
+            self.assertEqual(patient['dob'],'2000-06-15')
+        self.assertIn(b'patient@example.com',self.doctor.get(response.location).data)
+        response=self.post(self.doctor,'/patients/register',{**details,'email':''})
+        self.assertEqual(response.status_code,302)
+        with app.app_context():
+            self.assertIsNone(q('SELECT email FROM patients WHERE id=?',(response.location.rsplit('/',1)[-1],),one=True)['email'])
+        for invalid in [{'dob':''},{'dob':'not-a-date'},{'dob':'2999-01-01'},{'email':'invalid-address'}]:
+            self.assertEqual(self.post(self.doctor,'/patients/register',{**details,**invalid}).status_code,400)
+    def test_legacy_patient_schema_upgrade(self):
+        from app import init_db
+        with app.app_context():
+            db().execute('ALTER TABLE patients DROP COLUMN email')
+            db().execute('ALTER TABLE patients DROP COLUMN dob')
+            db().commit()
+            init_db()
+            init_db()
+            patient=q('SELECT * FROM patients WHERE id=?',('PAT-4921',),one=True)
+            self.assertEqual(patient['name'],'Olivia Rhye')
+            self.assertIsNone(patient['email'])
+            self.assertIsNone(patient['dob'])
     def test_admin_password_reset(self):
         from manage import initialize
         with patch.dict(os.environ, {'INITIAL_ADMIN_ID':'ADM-101','RESET_ADMIN_PASSWORD':'NewPrivatePassword123!'}):
