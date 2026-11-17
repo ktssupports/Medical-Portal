@@ -64,6 +64,9 @@ def init_db():
     for column, kind in [('email', 'TEXT'), ('dob', 'DATE')]:
         if column not in columns:
             execute(f'ALTER TABLE patients ADD COLUMN {column} {kind}')
+    if DATABASE:
+        execute('ALTER TABLE clinical_notes ENABLE ROW LEVEL SECURITY')
+        execute('REVOKE ALL ON clinical_notes FROM PUBLIC, anon, authenticated')
     db().commit()
 
 def can_read(pid):
@@ -202,8 +205,21 @@ def patient_detail(pid):
     if not p: abort(404)
     readings=q('SELECT * FROM readings WHERE patient_id=? ORDER BY created DESC',(pid,))
     reports=q('SELECT * FROM reports WHERE patient_id=? ORDER BY created DESC',(pid,))
+    notes=q('SELECT n.*,u.name AS doctor_name FROM clinical_notes n JOIN users u ON u.id=n.doctor_id WHERE n.patient_id=? ORDER BY n.created DESC,n.id DESC',(pid,))
     audit('view_patient',pid);db().commit()
-    return render_template('patient.html',active='history' if g.user['role']=='patient' else 'patients',patient=p,readings=readings,reports=reports)
+    return render_template('patient.html',active='history' if g.user['role']=='patient' else 'patients',patient=p,readings=readings,reports=reports,notes=notes)
+
+@app.post('/patients/<pid>/notes')
+@roles('doctor')
+def add_clinical_note(pid):
+    if not can_read(pid): abort(403)
+    body=request.form.get('body','').strip()
+    if not body or len(body)>20000:
+        abort(400,'Enter a clinical note between 1 and 20,000 characters.')
+    execute('INSERT INTO clinical_notes (id,patient_id,doctor_id,body,created) VALUES(?,?,?,?,?)',
+        (secrets.token_hex(16),pid,g.user['id'],body,time.time()))
+    audit('add_clinical_note',pid);db().commit();flash('Clinical note saved and shared with the patient.')
+    return redirect(url_for('patient_detail',pid=pid))
 
 @app.post('/readings')
 @roles('doctor')

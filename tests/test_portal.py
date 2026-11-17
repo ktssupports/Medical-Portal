@@ -9,7 +9,7 @@ class PortalTests(unittest.TestCase):
     def setUp(self):
         app.config['TESTING']=True
         with app.app_context():
-            for table in ['audit','sessions','login_attempts','reports','orders','readings','access','patients','users','organizations']:db().execute('DELETE FROM '+table)
+            for table in ['clinical_notes','audit','sessions','login_attempts','reports','orders','readings','access','patients','users','organizations']:db().execute('DELETE FROM '+table)
             db().commit();seed_demo()
         self.doctor=self.login('DOC-101');self.patient=self.login('PAT-4921');self.lab=self.login('LAB-101');self.admin=self.login('ADM-101')
     def csrf(self,client):
@@ -91,6 +91,37 @@ class PortalTests(unittest.TestCase):
             self.assertEqual(args,('GET','https://test.supabase.co/storage/v1/object/medical-reports/abc'))
             self.assertEqual(kwargs['headers']['Authorization'],'Bearer server-secret')
             self.assertFalse(kwargs['allow_redirects'])
+    def test_clinical_notes_visibility_and_permissions(self):
+        path='/patients/PAT-4921/notes'
+        body='Visit notes\nFollow up in two weeks. <script>alert(1)</script>'
+        self.assertEqual(self.post(self.doctor,path,{'body':body}).status_code,302)
+        for client in (self.doctor,self.patient,self.admin):
+            page=client.get('/patients/PAT-4921')
+            self.assertEqual(page.status_code,200)
+            self.assertIn(b'Follow up in two weeks.',page.data)
+            self.assertIn(b'&lt;script&gt;',page.data)
+            self.assertNotIn(b'<script>alert(1)</script>',page.data)
+            self.assertIn(b'consultation-sidebar',page.data)
+        self.assertNotIn(b'<textarea',self.patient.get('/patients/PAT-4921').data)
+        self.assertEqual(self.post(self.patient,path,{'body':'Patient edit'}).status_code,403)
+        self.assertEqual(self.post(self.lab,path,{'body':'Lab edit'}).status_code,403)
+        self.assertEqual(self.lab.get('/patients/PAT-4921').status_code,403)
+        self.assertNotIn(b'Follow up in two weeks.',self.doctor.get('/patients/PAT-4922').data)
+        self.post(self.patient,'/permissions',{'doctor_id':'DOC-101','granted':'0'})
+        self.assertEqual(self.doctor.get('/patients/PAT-4921').status_code,403)
+        self.assertEqual(self.post(self.doctor,path,{'body':'Revoked edit'}).status_code,403)
+        self.assertIn(b'Follow up in two weeks.',self.patient.get('/patients/PAT-4921').data)
+        with app.app_context():
+            self.assertEqual(q('SELECT COUNT(*) AS n FROM clinical_notes',one=True)['n'],1)
+            event=q("SELECT target FROM audit WHERE action='add_clinical_note'",one=True)
+            self.assertEqual(event['target'],'PAT-4921')
+    def test_clinical_notes_validation(self):
+        path='/patients/PAT-4921/notes'
+        for body in ('','   ','a'*20001):
+            self.assertEqual(self.post(self.doctor,path,{'body':body}).status_code,400)
+        self.assertEqual(self.doctor.post(path,data={'body':'Missing CSRF'}).status_code,400)
+        with app.app_context():
+            self.assertEqual(q('SELECT COUNT(*) AS n FROM clinical_notes',one=True)['n'],0)
     def test_patient_registration_email_and_dob(self):
         details={'name':'DOB Patient','dob':'2000-06-15','gender':'Female','phone':'555-0100','email':'patient@example.com'}
         response=self.post(self.doctor,'/patients/register',details)

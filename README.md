@@ -6,8 +6,8 @@ Four working portals, using **Render Free** application hosting and **Supabase F
 
 | Portal | Workflows |
 | --- | --- |
-| Doctor | Login, register patients, search authorized patients by unique ID/name, patient dashboards, BP/glucose readings, test orders, view/download reports |
-| Patient | Login, personal records, BP/glucose history and charts, view/download reports, grant/revoke doctor access |
+| Doctor | Login, register patients, search authorized patients by unique ID/name, patient dashboards, shared clinical notes, BP/glucose readings, test orders, view/download reports |
+| Patient | Login, personal records and read-only doctor notes, BP/glucose history and charts, view/download reports, grant/revoke doctor access |
 | Laboratory | Login, assigned authorized orders, mark processing, upload PDF reports, uploaded history |
 | Admin | Register organizations, create/approve/suspend accounts, manage staff roles, register patients, doctor assignments, audit log |
 
@@ -61,3 +61,9 @@ Tests run against temporary isolated SQLite data using Flask's test client, cove
 - Audit events include login, record views, searches, modifications, and report downloads. They exclude clinical contents; database owners can modify them. An immutable audit sink is not included.
 - Gunicorn supplies production HTTP transport. `/health` checks database connectivity. Render offers deployment/health logs; external alerting needs setup.
 - Free hosting may sleep and database projects may pause. Free plans are for evaluation/synthetic data; no uptime, medical compliance, automatic backups, or paid features are assumed. Before real clinical use, arrange appropriate provider agreements and add recovery/MFA, malware scanning, immutable auditing, tested backups, retention policies, and operational review.
+
+## Patient consultation workspace
+
+The patient detail page places a free-text clinical-notes editor on the left and consultation history, BP/glucose charts, reading entry, and reading history on the right. Notes are saved as separate dated entries rather than overwriting previous consultations. Authorized doctors can add notes; patients can read notes on their own records but cannot edit them. Existing admin oversight is preserved. Laboratories and doctors whose patient access was revoked cannot read or write notes. Notes are rendered as plain text, with HTML escaped.
+
+Startup creates the `clinical_notes` table and patient/date index. In PostgreSQL, it enables RLS and denies browser roles access, matching the server-authorized access model of the other private tables. No historical notes are backfilled.
