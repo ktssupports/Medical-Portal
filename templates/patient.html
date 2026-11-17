@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from 'components.html' import heading,chart,report_table,token,icon with context %}
+{% from 'components.html' import heading,report_table,token,icon with context %}
 {% block content %}
 {{ heading('Your patient record' if user.role=='patient' else 'Patient consultation','Clinical notes, health readings and history in one place.') }}
 <section class="card">
@@ -46,24 +46,24 @@
         {% else %}<p class="sidebar-empty">No consultation history yet.</p>{% endfor %}
       </div>
     </section>
-    {{ chart(readings,'systolic','Blood pressure','mmHg') }}
-    {{ chart(readings,'sugar','Blood sugar','mg/dL') }}
-    {% if user.role=='doctor' %}
-    <section class="card"><div class="card-head"><div><h2>Add BP / sugar readings</h2><p>Record measurements for this visit.</p></div></div>
-      <form class="card-body" action="/readings" method="post">{{ token() }}<input type="hidden" name="patient_id" value="{{ patient.id }}">
-        <div class="readings-form">
-          <label>Systolic (mmHg)<input type="number" name="systolic" required min="50" max="300" placeholder="120"></label>
-          <label>Diastolic (mmHg)<input type="number" name="diastolic" required min="30" max="200" placeholder="80"></label>
-          <label>Blood sugar (mg/dL)<input type="number" name="sugar" required min="20" max="700" placeholder="100"></label>
-        </div><div class="form-actions"><button class="btn" type="submit">Save readings</button></div>
-      </form>
-    </section>
-    {% endif %}
-    <section class="card"><div class="card-head"><h2>Reading history</h2></div>
-      <div class="table-scroll"><table><thead><tr><th>Date</th><th>BP</th><th>Sugar</th></tr></thead><tbody>
-        {% for r in readings %}<tr><td>{{ r.created|date }}</td><td>{{ r.systolic }}/{{ r.diastolic }}<small class="sub">mmHg</small></td><td>{{ r.sugar }}<small class="sub">mg/dL</small></td></tr>
-        {% else %}<tr><td colspan="3" class="empty">No readings recorded yet.</td></tr>{% endfor %}
-      </tbody></table></div>
+    <section class="card readings-card">
+      <div class="card-head"><div><h2>BP &amp; blood sugar</h2><p>{{ 'Enter today’s readings in the first row.' if user.role=='doctor' else 'Your readings, newest first.' }}</p></div></div>
+      {% if user.role=='doctor' %}<form method="post" action="{{ url_for('add_reading') }}">{{ token() }}<input type="hidden" name="patient_id" value="{{ patient.id }}">{% endif %}
+      <div class="table-scroll"><table class="readings-table">
+        <thead><tr><th scope="col">Date</th><th scope="col">BP<small class="sub">mmHg</small></th><th scope="col">Blood sugar<small class="sub">mg/dL</small></th></tr></thead>
+        <tbody>
+          {% if user.role=='doctor' %}
+          <tr class="today-reading"><td><strong>{{ reading_today }}</strong><small class="sub">Today</small></td>
+            <td><div class="bp-inline"><label class="sr-only" for="reading-systolic">Today’s systolic blood pressure (mmHg)</label><input id="reading-systolic" name="systolic" type="number" required min="50" max="300" placeholder="120" aria-label="Systolic BP"><span>/</span><label class="sr-only" for="reading-diastolic">Today’s diastolic blood pressure (mmHg)</label><input id="reading-diastolic" name="diastolic" type="number" required min="30" max="200" placeholder="80" aria-label="Diastolic BP"></div></td>
+            <td><label class="sr-only" for="reading-sugar">Today’s blood sugar (mg/dL)</label><input id="reading-sugar" name="sugar" type="number" required min="20" max="700" placeholder="150" aria-label="Blood sugar"></td>
+          </tr>
+          <tr class="reading-save"><td colspan="3"><button class="btn small" type="submit">Save today’s readings</button></td></tr>
+          {% endif %}
+          {% for r in readings %}<tr class="saved-reading"><td>{{ r.created|reading_date }}</td><td>{{ r.systolic }}/{{ r.diastolic }}</td><td>{{ r.sugar }}</td></tr>
+          {% else %}<tr><td colspan="3" class="empty">No readings recorded yet.</td></tr>{% endfor %}
+        </tbody>
+      </table></div>
+      {% if user.role=='doctor' %}</form>{% endif %}
     </section>
   </aside>
 </div>
