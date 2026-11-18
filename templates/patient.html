@@ -1,11 +1,12 @@
 {% extends 'base.html' %}
 {% from 'components.html' import heading,report_table,token,icon with context %}
 {% block content %}
+<div class="patient-workspace {{ 'doctor-workspace' if user.role=='doctor' }}">
 {{ heading('Your patient record' if user.role=='patient' else 'Patient consultation','Clinical notes, health readings and history in one place.') }}
-<section class="card">
+<section class="card patient-summary">
   <div class="card-body patient-banner">
     <div class="avatar">{{ patient.name[:1] }}{{ patient.name.split(' ')[-1][:1] }}</div>
-    <div>
+    <div class="patient-identification">
       <h2>{{ patient.name }}</h2>
       <p>{{ patient.id }} &nbsp;·&nbsp; {{ patient.age }} years &nbsp;·&nbsp; {{ patient.gender }} &nbsp;·&nbsp; {{ patient.phone }}</p>
       {% if patient.dob %}<p>Date of birth: {{ patient.dob }}</p>{% endif %}
@@ -13,7 +14,7 @@
     </div>
   </div>
 </section>
-{% if consultation %}<section class="card"><div class="card-head"><div><h2>Consultation in progress · Token #{{ consultation.position }}</h2><p>Save your notes and readings before completing this visit.</p></div><form method="post" action="{{ url_for('queue_status',qid=consultation.id) }}">{{ token() }}<input type="hidden" name="status" value="completed"><button class="btn" type="submit">Complete consultation</button></form></div></section>{% endif %}
+{% if consultation %}<section class="card consultation-status"><div class="card-head"><div><h2>Consultation in progress · Token #{{ consultation.position }}</h2><p>Save your notes and readings before completing this visit.</p></div><form method="post" action="{{ url_for('queue_status',qid=consultation.id) }}">{{ token() }}<input type="hidden" name="status" value="completed"><button class="btn" type="submit">Complete consultation</button></form></div></section>{% endif %}
 <div class="consultation-layout">
   <div class="consultation-main">
     {% if user.role=='doctor' %}
@@ -27,6 +28,7 @@
       </form>
     </section>
     {% endif %}
+    {% if user.role!='doctor' %}
     <section class="card saved-notes">
       <div class="card-head"><div><h2>{{ 'Your clinical notes' if user.role=='patient' else 'Saved clinical notes' }}</h2><p>Consultation notes from the authorized care team</p></div><span class="pill">{{ notes|length }} notes</span></div>
       {% for note in notes %}
@@ -36,11 +38,15 @@
       </article>
       {% else %}<div class="empty">No clinical notes yet. Notes saved by your doctor will appear here.</div>{% endfor %}
     </section>
-    <section class="card"><div class="card-head"><h2>Medical reports</h2></div>{{ report_table(reports) }}</section>
+    {% endif %}
+    <details class="card patient-reports">
+      <summary><span>Medical reports</span><span class="pill">{{ reports|length }}</span><span class="report-toggle">Expand / collapse</span></summary>
+      <div class="reports-panel">{{ report_table(reports) }}</div>
+    </details>
   </div>
   <aside class="consultation-sidebar" aria-label="Patient history and health readings">
-    <section class="card">
-      <div class="card-head"><div><h2>Patient history</h2><p>Previous consultations</p></div>{{ icon('clock') }}</div>
+    <section class="card patient-history">
+      <div class="card-head"><div><h2>Patient history <span class="pill">{{ notes|length }}</span></h2><p>Expand a consultation to read its notes.</p></div>{{ icon('clock') }}</div>
       <div class="card-body history-timeline">
         {% for note in notes %}
         <details class="history-entry"><summary><span>{{ note.created|date }}</span><strong>{{ note.doctor_name }}</strong></summary><p class="note-content">{{ note.body }}</p></details>
@@ -51,8 +57,7 @@
       <div class="card-head"><div><h2>BP &amp; blood sugar</h2><p>{{ 'Enter today’s readings in the first row.' if user.role=='doctor' else 'Your readings, newest first.' }}</p></div></div>
       {% if user.role=='doctor' %}<form method="post" action="{{ url_for('add_reading') }}">{{ token() }}<input type="hidden" name="patient_id" value="{{ patient.id }}">{% endif %}
       <div class="table-scroll"><table class="readings-table">
-        <thead><tr><th scope="col">Date</th><th scope="col">BP<small class="sub">mmHg</small></th><th scope="col">Blood sugar<small class="sub">mg/dL</small></th></tr></thead>
-        <tbody>
+        <thead><tr><th scope="col">Date</th><th scope="col">BP<small class="sub">mmHg</small></th><th scope="col">Blood sugar<small class="sub">mg/dL</small></th></tr>
           {% if user.role=='doctor' %}
           <tr class="today-reading"><td><strong>{{ reading_today }}</strong><small class="sub">Today</small></td>
             <td><div class="bp-inline"><label class="sr-only" for="reading-systolic">Today’s systolic blood pressure (mmHg)</label><input id="reading-systolic" name="systolic" type="number" required min="50" max="300" placeholder="120" aria-label="Systolic BP"><span>/</span><label class="sr-only" for="reading-diastolic">Today’s diastolic blood pressure (mmHg)</label><input id="reading-diastolic" name="diastolic" type="number" required min="30" max="200" placeholder="80" aria-label="Diastolic BP"></div></td>
@@ -60,6 +65,8 @@
           </tr>
           <tr class="reading-save"><td colspan="3"><button class="btn small" type="submit">Save today’s readings</button></td></tr>
           {% endif %}
+        </thead>
+        <tbody>
           {% for r in readings %}<tr class="saved-reading"><td>{{ r.created|reading_date }}</td><td>{{ r.systolic }}/{{ r.diastolic }}</td><td>{{ r.sugar }}</td></tr>
           {% else %}<tr><td colspan="3" class="empty">No readings recorded yet.</td></tr>{% endfor %}
         </tbody>
@@ -67,5 +74,6 @@
       {% if user.role=='doctor' %}</form>{% endif %}
     </section>
   </aside>
+</div>
 </div>
 {% endblock %}
