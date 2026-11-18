@@ -9,3 +9,61 @@
 .queue-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.queue-table td:first-child strong{font-size:16px;color:#2865e8}.section-note{font-size:11px;color:#8795a9;margin-top:18px}
 
 .queue-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.queue-actions form{margin:0}[data-queue-feed] .table-scroll{max-height:520px;overflow:auto}[data-queue-feed] th{position:sticky;top:0;z-index:1}
+
+/* Keep the doctor's consultation tools in the desktop viewport. Long histories
+   scroll within their panels; the note editor and today's inputs stay visible. */
+.patient-reports>summary{display:flex;align-items:center;gap:10px;cursor:pointer;padding:15px 20px;font-size:13px;font-weight:600;color:#405777;list-style:none}.patient-reports>summary::-webkit-details-marker{display:none}.report-toggle{margin-left:auto;font-size:10px;font-weight:400;color:#8495ad}.patient-reports[open]>summary{border-bottom:1px solid #edf1f6}.patient-reports[open]{min-height:0}.reports-panel{max-height:220px;overflow:auto}
+@media(min-width:1000px) and (min-height:600px){
+  .content:has(>.doctor-workspace){max-width:none;padding:16px 22px;height:calc(100dvh - 83px);display:flex;flex-direction:column;overflow:hidden}
+  .content:has(>.doctor-workspace)>footer{display:none}
+  .content:has(>.doctor-workspace)>.flash{margin-bottom:8px;padding:7px 12px;font-size:11px;flex-shrink:0}
+  .doctor-workspace{display:flex;flex-direction:column;flex:1;min-height:0;gap:10px}
+  .doctor-workspace>.page-heading{margin:0;flex-shrink:0}
+  .doctor-workspace>.page-heading h1{font-size:20px;margin-bottom:0}
+  .doctor-workspace>.page-heading p{display:none}
+  .doctor-workspace .consultation-layout{flex:1;min-height:0;gap:12px;grid-template-columns:minmax(0,1fr) minmax(320px,360px);align-items:stretch}
+  .doctor-workspace .consultation-main,.doctor-workspace .consultation-sidebar{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
+  .doctor-workspace .consultation-layout .card{margin:0}
+  .doctor-workspace .consultation-layout .card-head{padding:11px 14px;flex-shrink:0}
+  .doctor-workspace .consultation-layout .card-head h2{font-size:13px}
+  .doctor-workspace .consultation-layout .card-head p{font-size:10px;margin-top:3px}
+  .doctor-workspace .notes-editor{flex:1;min-height:0;display:flex;flex-direction:column}
+  .doctor-workspace .notes-editor>.card-body{display:flex;flex-direction:column;flex:1;min-height:0;padding:12px 16px}
+  .doctor-workspace .patient-summary{margin:0;flex-shrink:0}
+  .doctor-workspace .patient-banner{padding:11px 15px;gap:12px;align-items:center}
+  .doctor-workspace .patient-banner .avatar{width:40px;height:40px;font-size:16px}
+  .doctor-workspace .patient-identification{display:flex;flex-wrap:wrap;align-items:center;column-gap:18px;row-gap:3px;min-width:0}
+  .doctor-workspace .patient-identification h2{flex-basis:100%;font-size:15px}
+  .doctor-workspace .patient-identification p{font-size:11px;margin:0;overflow-wrap:anywhere}
+  .doctor-workspace .consultation-status{margin:0;flex-shrink:0}
+  .doctor-workspace .consultation-status .card-head{padding:8px 14px}
+  .doctor-workspace .consultation-status h2{font-size:12px}
+  .doctor-workspace .consultation-status p{display:none}
+  .doctor-workspace .consultation-status .btn{font-size:11px;padding:7px 10px}
+  .doctor-workspace .consultation-layout{flex:1;min-height:0;grid-template-columns:minmax(0,1fr) minmax(330px,38%);gap:14px;align-items:stretch}
+  .doctor-workspace .consultation-main,.doctor-workspace .consultation-sidebar{display:flex;flex-direction:column;gap:12px;min-height:0}
+  .doctor-workspace .consultation-layout .card{margin:0}
+  .doctor-workspace .card-head{padding:12px 15px;flex-shrink:0}
+  .doctor-workspace .card-head h2{font-size:14px}
+  .doctor-workspace .card-head p{font-size:10px;margin-top:3px}
+  .doctor-workspace .notes-editor{flex:1;min-height:0;display:flex;flex-direction:column}
+  .doctor-workspace .notes-editor form{display:flex;flex-direction:column;flex:1;min-height:0;padding:12px 16px}
+  .doctor-workspace .notes-editor textarea{flex:1;min-height:0;height:0;resize:none;overflow:auto;font-size:14px}
+  .doctor-workspace .notes-actions{flex-shrink:0;flex-direction:row;align-items:center;gap:8px;padding-top:10px;margin-top:8px}
+  .doctor-workspace .notes-actions p{font-size:9px}
+  .doctor-workspace .notes-actions .btn{padding:8px 12px;font-size:11px}
+  .doctor-workspace .patient-reports{flex-shrink:0}
+  .doctor-workspace .patient-reports>summary{padding:10px 15px}
+  .doctor-workspace .patient-reports .reports-panel{max-height:min(170px,24dvh)}
+  .doctor-workspace .patient-history{display:flex;flex-direction:column;flex:0 1 auto;min-height:90px;max-height:36%}
+  .doctor-workspace .history-timeline{overflow:auto;min-height:0;padding:12px 15px;overscroll-behavior:contain}
+  .doctor-workspace .history-entry{padding-bottom:14px}
+  .doctor-workspace .readings-card{display:flex;flex-direction:column;flex:1;min-height:0}
+  .doctor-workspace .readings-card>form{display:flex;flex-direction:column;flex:1;min-height:0}
+  .doctor-workspace .readings-card .table-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+  .doctor-workspace .readings-table thead{position:sticky;top:0;z-index:2;background:#f0f6ff}
+  .doctor-workspace .readings-table th,.doctor-workspace .readings-table td{padding:8px 9px}
+  .doctor-workspace .readings-table input{padding:7px 4px}
+  .doctor-workspace .readings-table .reading-save td{padding-top:4px;padding-bottom:8px}
+}
+@media(max-width:999px),(max-height:599px){.patient-workspace .patient-summary{margin-bottom:15px}.patient-workspace .history-timeline{max-height:260px;overflow:auto}.patient-workspace .readings-card .table-scroll{max-height:360px;overflow:auto}}
