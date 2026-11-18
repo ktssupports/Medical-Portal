@@ -67,3 +67,11 @@ Tests run against temporary isolated SQLite data using Flask's test client, cove
 The patient detail page places a free-text clinical-notes editor on the left and consultation history, BP/glucose charts, reading entry, and reading history on the right. Notes are saved as separate dated entries rather than overwriting previous consultations. Authorized doctors can add notes; patients can read notes on their own records but cannot edit them. Existing admin oversight is preserved. Laboratories and doctors whose patient access was revoked cannot read or write notes. Notes are rendered as plain text, with HTML escaped.
 
 Startup creates the `clinical_notes` table and patient/date index. In PostgreSQL, it enables RLS and denies browser roles access, matching the server-authorized access model of the other private tables. No historical notes are backfilled.
+
+## Daily patient queue
+
+Admin handles reception tasks using the existing Admin login. Open **Patient queue**, select a registered patient and approved doctor, then add the patient. Queue assignment also grants the selected doctor access to that patient’s record, as explained on the form. Patients retain permission to revoke access.
+
+Doctors see their own queue on Overview and Patient queue, refreshed every 10 seconds while the tab is visible. Numbering restarts daily in Asia/Kolkata time. A doctor starts the first waiting patient, then saves clinical notes/readings and completes the consultation. Only one consultation per doctor may be active at a time. Admin can cancel active entries; completed/cancelled entries remain visible for the day. Duplicate active entries for the same patient/doctor/day are rejected.
+
+Startup creates the private patient_queue table and indexes. PostgreSQL uses a transaction-scoped advisory lock per doctor/day for token allocation and status changes. SQLite demo uses an immediate write transaction. Queues are persisted in the database; automatic refreshing uses authenticated, non-cached HTML fragments, not full-page reloads. Patients and laboratories cannot access staff queue endpoints, and revoked doctor access hides the associated queue entry. No separate Reception role is added.

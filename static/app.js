@@ -3,3 +3,24 @@ if(menu)menu.addEventListener('click',()=>{const opened=document.getElementById(
 function drawCharts(){document.querySelectorAll('canvas.chart').forEach(canvas=>{const data=JSON.parse(canvas.dataset.readings);if(!data.length)return;const key=canvas.dataset.key,values=data.map(r=>r[key]),low=Math.min(...values)-10,high=Math.max(...values)+10;const width=canvas.clientWidth||400,height=180,dpr=window.devicePixelRatio||1;canvas.width=width*dpr;canvas.height=height*dpr;const c=canvas.getContext('2d');c.scale(dpr,dpr);const x=i=>25+i*(width-50)/Math.max(1,data.length-1),y=v=>130-(v-low)/(high-low)*100;c.lineWidth=1;c.strokeStyle='#edf1f7';[30,80,130].forEach(y=>{c.beginPath();c.moveTo(20,y);c.lineTo(width-15,y);c.stroke()});const gradient=c.createLinearGradient(0,20,0,140);gradient.addColorStop(0,'#2563eb20');gradient.addColorStop(1,'#2563eb00');c.beginPath();c.moveTo(x(0),140);values.forEach((v,i)=>c.lineTo(x(i),y(v)));c.lineTo(x(values.length-1),140);c.closePath();c.fillStyle=gradient;c.fill();c.beginPath();c.strokeStyle='#3775e9';c.lineWidth=2.5;values.forEach((v,i)=>i?c.lineTo(x(i),y(v)):c.moveTo(x(i),y(v)));c.stroke();values.forEach((v,i)=>{c.beginPath();c.arc(x(i),y(v),3.5,0,Math.PI*2);c.fillStyle='white';c.fill();c.strokeStyle='#3775e9';c.lineWidth=2;c.stroke();if(data.length<=6||i%2===0){c.fillStyle='#98a5b7';c.font='10px sans-serif';c.textAlign='center';c.fillText(new Date(data[i].created*1000).toLocaleDateString('en-US',{month:'short',day:'numeric'}),x(i),164)}})})}
 drawCharts();window.addEventListener('resize',drawCharts);
 document.querySelectorAll('input[type=file]').forEach(input=>input.addEventListener('change',()=>{input.setCustomValidity(input.files[0]?.size>5*1024*1024?'Choose a PDF smaller than 5 MB.':'');input.reportValidity()}));
+
+// Refresh only the queue fragment; leave consultation notes and forms untouched.
+document.querySelectorAll('[data-queue-feed]').forEach(feed=>{
+  const status=feed.closest('.card').querySelector('[data-queue-status]');
+  let stopped=false;
+  async function refreshQueue(){
+    try{
+      if(document.hidden||feed.contains(document.activeElement))return;
+      const response=await fetch(feed.dataset.url,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(8000)});
+      if(response.redirected||response.status===401||response.status===403){
+        if(status)status.textContent='Session ended. Sign in again to refresh the queue.';
+        stopped=true;return;
+      }
+      if(!response.ok)throw Error('Queue refresh failed');
+      feed.innerHTML=await response.text();
+      if(status)status.textContent='Queue updated · '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})+' · refreshes every 10 seconds';
+    }catch(error){if(status)status.textContent='Unable to refresh. Retrying automatically…';}
+    finally{if(!stopped)setTimeout(refreshQueue,10000);}
+  }
+  setTimeout(refreshQueue,10000);
+});

@@ -13,3 +13,6 @@ CREATE INDEX IF NOT EXISTS orders_lab ON orders(lab_id);
 CREATE INDEX IF NOT EXISTS attempts_account ON login_attempts(account,created);
 CREATE TABLE IF NOT EXISTS clinical_notes(id TEXT PRIMARY KEY,patient_id TEXT NOT NULL REFERENCES patients(id),doctor_id TEXT NOT NULL REFERENCES users(id),body TEXT NOT NULL,created DOUBLE PRECISION NOT NULL);
 CREATE INDEX IF NOT EXISTS clinical_notes_patient ON clinical_notes(patient_id,created);
+CREATE TABLE IF NOT EXISTS patient_queue(id TEXT PRIMARY KEY,patient_id TEXT NOT NULL REFERENCES patients(id),doctor_id TEXT NOT NULL REFERENCES users(id),service_day TEXT NOT NULL,position INTEGER NOT NULL,status TEXT NOT NULL CHECK(status IN ('waiting','consulting','completed','cancelled')),created DOUBLE PRECISION NOT NULL,updated DOUBLE PRECISION NOT NULL,created_by TEXT NOT NULL REFERENCES users(id),UNIQUE(doctor_id,service_day,position));
+CREATE UNIQUE INDEX IF NOT EXISTS queue_active_patient ON patient_queue(patient_id,doctor_id,service_day) WHERE status IN ('waiting','consulting');
+CREATE INDEX IF NOT EXISTS queue_doctor_day ON patient_queue(doctor_id,service_day,status,position);

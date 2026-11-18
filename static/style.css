@@ -5,3 +5,7 @@
 
 /* Enter current readings directly above the newest-first history. */
 .readings-table th,.readings-table td{padding:12px 10px;font-size:11px}.readings-table th{white-space:normal}.readings-table th:first-child,.readings-table td:first-child{white-space:nowrap}.readings-table input{margin:0;padding:9px 5px;font-size:12px;width:100%;min-width:0}.bp-inline{display:flex;align-items:center;gap:3px;min-width:106px}.bp-inline input{width:50px}.bp-inline span{color:#8b9aaf}.today-reading{background:#f0f6ff}.today-reading strong{font-weight:600;color:#2865e8}.reading-save td{text-align:right;background:#f0f6ff}.readings-table #reading-sugar{min-width:62px}.readings-table .sub{margin-top:4px}.saved-reading td{color:#536982}
+
+.queue-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.queue-table td:first-child strong{font-size:16px;color:#2865e8}.section-note{font-size:11px;color:#8795a9;margin-top:18px}
+
+.queue-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.queue-actions form{margin:0}[data-queue-feed] .table-scroll{max-height:520px;overflow:auto}[data-queue-feed] th{position:sticky;top:0;z-index:1}

@@ -68,6 +68,8 @@ def init_db():
     if DATABASE:
         execute('ALTER TABLE clinical_notes ENABLE ROW LEVEL SECURITY')
         execute('REVOKE ALL ON clinical_notes FROM PUBLIC, anon, authenticated')
+        execute('ALTER TABLE patient_queue ENABLE ROW LEVEL SECURITY')
+        execute('REVOKE ALL ON patient_queue FROM PUBLIC, anon, authenticated')
     db().commit()
 
 def can_read(pid):
@@ -168,7 +170,76 @@ def dashboard():
     organizations=q('SELECT * FROM organizations') if g.user['role']=='admin' else []
     readings=q('SELECT * FROM readings WHERE patient_id=? ORDER BY created DESC',(g.user['id'],)) if g.user['role']=='patient' else []
     audit('view_dashboard',g.user['id']);db().commit()
-    return render_template('dashboard.html',active='dashboard',patients=patients,orders=orders,reports=reports,organizations=organizations,readings=readings)
+    return render_template('dashboard.html',active='dashboard',patients=patients,orders=orders,reports=reports,organizations=organizations,readings=readings,queue=queue_entries() if g.user['role'] in ('doctor','admin') else [],queue_day=queue_day())
+
+def queue_day():
+    return datetime.now(ZoneInfo('Asia/Kolkata')).date().isoformat()
+
+def queue_entries():
+    day=queue_day()
+    params=[day]
+    condition=''
+    if g.user['role']=='doctor':
+        condition=" AND pq.doctor_id=? AND EXISTS (SELECT 1 FROM access a WHERE a.patient_id=pq.patient_id AND a.doctor_id=pq.doctor_id AND a.granted=1)"
+        params.append(g.user['id'])
+    return q("SELECT pq.*,p.name AS patient_name,u.name AS doctor_name FROM patient_queue pq JOIN patients p ON p.id=pq.patient_id JOIN users u ON u.id=pq.doctor_id WHERE pq.service_day=?"+condition+" ORDER BY pq.doctor_id,pq.position",params)
+
+def lock_queue(doctor_id,day):
+    # Allocate daily queue numbers and change consultation state atomically.
+    if DATABASE:
+        execute('SELECT pg_advisory_xact_lock(hashtext(?))',(doctor_id+':'+day,))
+    else:
+        execute('BEGIN IMMEDIATE')
+
+@app.get('/queue')
+@roles('admin','doctor')
+def patient_queue():
+    patients=q('SELECT id,name FROM patients ORDER BY name') if g.user['role']=='admin' else []
+    doctors=q("SELECT id,name FROM users WHERE role='doctor' AND status='approved' ORDER BY name") if g.user['role']=='admin' else []
+    return render_template('queue.html',active='queue',patients=patients,doctors=doctors,queue=queue_entries(),queue_day=queue_day())
+
+@app.get('/queue/fragment')
+@roles('admin','doctor')
+def queue_fragment():
+    return render_template('queue_table.html',queue=queue_entries(),queue_day=queue_day())
+
+@app.post('/queue')
+@roles('admin')
+def enqueue_patient():
+    pid=request.form.get('patient_id','');doctor_id=request.form.get('doctor_id','');day=queue_day()
+    if not q('SELECT id FROM patients WHERE id=?',(pid,),one=True):abort(400,'Select a registered patient.')
+    if not q("SELECT id FROM users WHERE id=? AND role='doctor' AND status='approved'",(doctor_id,),one=True):abort(400,'Select an approved doctor.')
+    lock_queue(doctor_id,day)
+    if q("SELECT id FROM patient_queue WHERE patient_id=? AND doctor_id=? AND service_day=? AND status IN ('waiting','consulting')",(pid,doctor_id,day),one=True):
+        abort(409,'This patient is already in the doctor’s active queue today.')
+    position=q('SELECT COALESCE(MAX(position),0)+1 AS next_position FROM patient_queue WHERE doctor_id=? AND service_day=?',(doctor_id,day),one=True)['next_position']
+    now=time.time();qid=secrets.token_hex(16)
+    execute('INSERT INTO patient_queue VALUES(?,?,?,?,?,?,?,?,?)',(qid,pid,doctor_id,day,position,'waiting',now,now,g.user['id']))
+    execute('INSERT INTO access VALUES(?,?,?) ON CONFLICT(patient_id,doctor_id) DO UPDATE SET granted=excluded.granted',(pid,doctor_id,1))
+    audit('enqueue_patient',qid);db().commit();flash('Patient added to the doctor’s queue. Token #'+str(position))
+    return redirect(url_for('patient_queue'))
+
+@app.post('/queue/<qid>/status')
+@roles('admin','doctor')
+def queue_status(qid):
+    entry=q('SELECT * FROM patient_queue WHERE id=?',(qid,),one=True)
+    if not entry:abort(404)
+    if g.user['role']=='doctor' and (entry['doctor_id']!=g.user['id'] or not can_read(entry['patient_id'])):abort(403)
+    if entry['service_day']!=queue_day():abort(400,'Only today’s queue can be updated.')
+    lock_queue(entry['doctor_id'],entry['service_day'])
+    entry=q('SELECT * FROM patient_queue WHERE id=?',(qid,),one=True)
+    target=request.form.get('status','')
+    allowed={'waiting':('consulting','cancelled'),'consulting':('completed','cancelled')}
+    if target not in allowed.get(entry['status'],()):abort(400,'Invalid queue status change.')
+    if target=='consulting':
+        if g.user['role']!='doctor':abort(403)
+        if q("SELECT id FROM patient_queue WHERE doctor_id=? AND service_day=? AND status='consulting'",(entry['doctor_id'],entry['service_day']),one=True):
+            abort(409,'Complete the current consultation before starting another.')
+        first=q("SELECT id FROM patient_queue WHERE doctor_id=? AND service_day=? AND status='waiting' AND EXISTS (SELECT 1 FROM access a WHERE a.patient_id=patient_queue.patient_id AND a.doctor_id=patient_queue.doctor_id AND a.granted=1) ORDER BY position LIMIT 1",(entry['doctor_id'],entry['service_day']),one=True)
+        if not first or first['id']!=qid:abort(409,'Start with the first waiting patient.')
+    execute('UPDATE patient_queue SET status=?,updated=? WHERE id=?',(target,time.time(),qid))
+    audit('queue_'+target,qid);db().commit();flash('Queue updated.')
+    return redirect(url_for('patient_detail',pid=entry['patient_id']) if target=='consulting' else url_for('patient_queue'))
 
 @app.get('/patients')
 @roles('doctor','admin')
@@ -211,8 +282,9 @@ def patient_detail(pid):
     readings=q('SELECT * FROM readings WHERE patient_id=? ORDER BY created DESC',(pid,))
     reports=q('SELECT * FROM reports WHERE patient_id=? ORDER BY created DESC',(pid,))
     notes=q('SELECT n.*,u.name AS doctor_name FROM clinical_notes n JOIN users u ON u.id=n.doctor_id WHERE n.patient_id=? ORDER BY n.created DESC,n.id DESC',(pid,))
+    consultation=q("SELECT id,position FROM patient_queue WHERE patient_id=? AND doctor_id=? AND service_day=? AND status='consulting'",(pid,g.user['id'],queue_day()),one=True) if g.user['role']=='doctor' else None
     audit('view_patient',pid);db().commit()
-    return render_template('patient.html',active='history' if g.user['role']=='patient' else 'patients',patient=p,readings=readings,reports=reports,notes=notes,reading_today=datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%d/%m/%Y'))
+    return render_template('patient.html',active='history' if g.user['role']=='patient' else 'patients',patient=p,readings=readings,reports=reports,notes=notes,consultation=consultation,reading_today=datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%d/%m/%Y'))
 
 @app.post('/patients/<pid>/notes')
 @roles('doctor')
@@ -351,6 +423,7 @@ def audit_log():return render_template('audit.html',active='audit',events=q('SEL
 @app.errorhandler(400)
 @app.errorhandler(403)
 @app.errorhandler(404)
+@app.errorhandler(409)
 @app.errorhandler(413)
 @app.errorhandler(503)
 def expected_error(error):return render_template('error.html',code=error.code,message=error.description),error.code
