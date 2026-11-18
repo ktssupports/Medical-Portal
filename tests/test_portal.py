@@ -9,7 +9,7 @@ class PortalTests(unittest.TestCase):
     def setUp(self):
         app.config['TESTING']=True
         with app.app_context():
-            for table in ['clinical_notes','audit','sessions','login_attempts','reports','orders','readings','access','patients','users','organizations']:db().execute('DELETE FROM '+table)
+            for table in ['patient_queue','clinical_notes','audit','sessions','login_attempts','reports','orders','readings','access','patients','users','organizations']:db().execute('DELETE FROM '+table)
             db().commit();seed_demo()
         self.doctor=self.login('DOC-101');self.patient=self.login('PAT-4921');self.lab=self.login('LAB-101');self.admin=self.login('ADM-101')
     def csrf(self,client):
@@ -22,7 +22,7 @@ class PortalTests(unittest.TestCase):
         c=app.test_client();r=self.post(c,'/login',{'id':uid,'password':'DemoPass123!'})
         self.assertEqual(r.status_code,302);return c
     def test_all_portal_pages_render(self):
-        for c,paths in [(self.doctor,['/','/patients','/patients?search=PAT-4921','/patients/register','/patients/PAT-4921','/orders','/reports']),(self.patient,['/','/patients/PAT-4921','/permissions','/reports']),(self.lab,['/','/orders','/reports']),(self.admin,['/','/patients','/patients/register','/permissions','/orders','/reports','/admin/organizations','/admin/accounts','/admin/audit'])]:
+        for c,paths in [(self.doctor,['/','/queue','/queue/fragment','/patients','/patients?search=PAT-4921','/patients/register','/patients/PAT-4921','/orders','/reports']),(self.patient,['/','/patients/PAT-4921','/permissions','/reports']),(self.lab,['/','/orders','/reports']),(self.admin,['/','/queue','/queue/fragment','/patients','/patients/register','/permissions','/orders','/reports','/admin/organizations','/admin/accounts','/admin/audit'])]:
             for path in paths:
                 with self.subTest(path=path):self.assertEqual(c.get(path).status_code,200)
     def test_anonymous_and_role_boundaries(self):
@@ -91,6 +91,56 @@ class PortalTests(unittest.TestCase):
             self.assertEqual(args,('GET','https://test.supabase.co/storage/v1/object/medical-reports/abc'))
             self.assertEqual(kwargs['headers']['Authorization'],'Bearer server-secret')
             self.assertFalse(kwargs['allow_redirects'])
+    def test_patient_queue_live_visibility_and_workflow(self):
+        details={'patient_id':'PAT-4921','doctor_id':'DOC-101'}
+        self.assertEqual(self.post(self.admin,'/queue',details).status_code,302)
+        self.assertEqual(self.post(self.admin,'/queue',details).status_code,409)
+        self.assertEqual(self.post(self.admin,'/queue',{'patient_id':'PAT-4922','doctor_id':'DOC-101'}).status_code,302)
+        with app.app_context():
+            entries=q('SELECT * FROM patient_queue ORDER BY position')
+            self.assertEqual([e['position'] for e in entries],[1,2])
+        fragment=self.doctor.get('/queue/fragment')
+        self.assertEqual(fragment.status_code,200)
+        self.assertIn(b'Olivia Rhye',fragment.data)
+        self.assertIn(b'Phoenix Baker',fragment.data)
+        self.assertIn(b'data-queue-feed',self.doctor.get('/').data)
+        first,second=entries
+        self.assertEqual(self.post(self.doctor,'/queue/'+second['id']+'/status',{'status':'consulting'}).status_code,409)
+        started=self.post(self.doctor,'/queue/'+first['id']+'/status',{'status':'consulting'})
+        self.assertEqual(started.status_code,302)
+        self.assertTrue(started.location.endswith('/patients/PAT-4921'))
+        self.assertEqual(self.post(self.doctor,'/queue/'+second['id']+'/status',{'status':'consulting'}).status_code,409)
+        self.assertEqual(self.post(self.doctor,'/queue/'+first['id']+'/status',{'status':'completed'}).status_code,302)
+        self.assertEqual(self.post(self.doctor,'/queue/'+second['id']+'/status',{'status':'consulting'}).status_code,302)
+        self.assertEqual(self.post(self.admin,'/queue/'+second['id']+'/status',{'status':'cancelled'}).status_code,302)
+    def test_patient_queue_permissions(self):
+        details={'patient_id':'PAT-4921','doctor_id':'DOC-101'}
+        for client in (self.patient,self.lab):
+            self.assertEqual(client.get('/queue').status_code,403)
+            self.assertEqual(client.get('/queue/fragment').status_code,403)
+            self.assertEqual(self.post(client,'/queue',details).status_code,403)
+        self.assertEqual(self.post(self.doctor,'/queue',details).status_code,403)
+        self.assertEqual(self.admin.post('/queue',data=details).status_code,400)
+        self.post(self.admin,'/admin/accounts',{'action':'create','id':'DOC-OTHER','name':'Other Doctor','role':'doctor','org_id':'ORG-101','password':'DemoPass123!'})
+        self.post(self.admin,'/admin/accounts',{'action':'update','id':'DOC-OTHER','role':'doctor','status':'approved'})
+        other=self.login('DOC-OTHER')
+        self.post(self.admin,'/queue',details)
+        with app.app_context():entry=q('SELECT id FROM patient_queue',one=True)
+        path='/queue/'+entry['id']+'/status'
+        self.assertNotIn(b'Olivia Rhye',other.get('/queue/fragment').data)
+        self.assertEqual(self.post(other,path,{'status':'consulting'}).status_code,403)
+        self.post(self.patient,'/permissions',{'doctor_id':'DOC-101','granted':'0'})
+        self.assertNotIn(b'Olivia Rhye',self.doctor.get('/queue/fragment').data)
+        self.assertEqual(self.post(self.doctor,path,{'status':'consulting'}).status_code,403)
+    def test_patient_queue_daily_reset(self):
+        with patch('app.queue_day',return_value='2026-11-18'):
+            self.post(self.admin,'/queue',{'patient_id':'PAT-4921','doctor_id':'DOC-101'})
+        with patch('app.queue_day',return_value='2026-11-19'):
+            self.assertNotIn(b'Olivia Rhye',self.doctor.get('/queue/fragment').data)
+            self.post(self.admin,'/queue',{'patient_id':'PAT-4921','doctor_id':'DOC-101'})
+            with app.app_context():
+                rows=q('SELECT position FROM patient_queue ORDER BY service_day')
+                self.assertEqual([r['position'] for r in rows],[1,1])
     def test_clinical_notes_visibility_and_permissions(self):
         path='/patients/PAT-4921/notes'
         body='Visit notes\nFollow up in two weeks. <script>alert(1)</script>'

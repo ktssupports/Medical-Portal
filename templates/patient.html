@@ -13,6 +13,7 @@
     </div>
   </div>
 </section>
+{% if consultation %}<section class="card"><div class="card-head"><div><h2>Consultation in progress · Token #{{ consultation.position }}</h2><p>Save your notes and readings before completing this visit.</p></div><form method="post" action="{{ url_for('queue_status',qid=consultation.id) }}">{{ token() }}<input type="hidden" name="status" value="completed"><button class="btn" type="submit">Complete consultation</button></form></div></section>{% endif %}
 <div class="consultation-layout">
   <div class="consultation-main">
     {% if user.role=='doctor' %}
